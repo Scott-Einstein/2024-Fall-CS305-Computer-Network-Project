@@ -53,6 +53,7 @@ class ConferenceClient:
         pass
 
     def keep_recv(self, recv_conn, data_type, decompress=None):
+        #接收3333
         '''
         running task: keep receiving certain type of data (save or output)
         you can create other functions for receiving various kinds of data
