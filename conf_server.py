@@ -24,8 +24,6 @@ class ConferenceServer:
         """
 
     async def log(self):
-        # running task: log the server status
-        # log the server status every LOG_INTERVAL seconds
         while self.running:
             print('Something about server status')
             await asyncio.sleep(LOG_INTERVAL)
