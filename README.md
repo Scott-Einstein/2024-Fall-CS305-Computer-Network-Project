@@ -4,7 +4,7 @@ SUSTech CS305 Computer Network Project -- Online Remote Conference
 
 ## 环境要求
 
-Python 3.9.7
+Python 3.9.20
 
 ## 如何设置本地仓库
 
