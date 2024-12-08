@@ -12,7 +12,7 @@ class ConferenceServer:
         self.clients_info = None
         self.client_conns = None
         self.mode = 'Client-Server'  # or 'P2P' if you want to support peer-to-peer conference mode
-        self.relay = MediaRelay() # 用于复用track向多个用户发送数据
+        # self.relay = MediaRelay() # 用于复用track向多个用户发送数据
         self.pcs = set() # 用于存储所有pc链接
     async def handle_data(self, reader, writer, data_type):
         """
