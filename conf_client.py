@@ -55,6 +55,8 @@ class ConferenceClient:
             self.on_meeting = True
             self.conference_info = conference_id  # Save the conference ID
             print(f"Now in meeting: {self.conference_info}")
+        # port = 8080
+        # self.start_conference(port)
         writer.close()
         await writer.wait_closed()
 
@@ -131,12 +133,56 @@ class ConferenceClient:
         running task: output received stream data
         '''
 
-    def start_conference(self):
+    async def start_conference(self,port):
         '''
         init conns when create or join a conference with necessary conference_info
         and
         start necessary running task for conference
         '''
+
+        # 当服务器创建了数据通道时，开始监听从服务器创建的数据通道
+        @self.pc.on('datachannel')
+        def on_datachannel(channel):
+            print(f"DataChannel created by server: {channel.label}")
+
+            @channel.on("message")
+            def on_message(message):
+                print(f"Message from server: {message}")
+
+        # 监听ICE连接状态变化
+
+        @self.pc.on("iceconnectionstatechange")
+        async def on_iceconnectionstatechange():
+            if self.pc.iceConnectionState == "failed":
+                await self.pc.close()
+
+        # 处理远程音视频轨道
+        @self.pc.on("track")
+        def on_track(track):
+            print(f"[INFO] Received remote track: {track.kind}")
+            if track.kind == "video":
+                asyncio.create_task(self.handle_video_track(track))
+            elif track.kind == "audio":
+                asyncio.create_task(play_audio())
+                asyncio.create_task(self.handle_audio_track(track))
+
+        # 创建WebRTC数据通道,监听open和message实践
+        self.channel = self.pc.createDataChannel("chat")
+        self.channel.on("open", lambda: print("[INFO] Text DataChannel open"))
+        self.channel.on("message", lambda message: print(f"Received message: {message}"))
+
+        # 创建音视频轨道
+        video_track = VideoStreamTrack()
+        self.pc.addTrack(video_track)
+        print("[INFO] Video DataChannel open")
+        audio_track = MicrophoneStreamTrack()
+        self.pc.addTrack(audio_track)
+        print("[INFO] Audio DataChannel open")
+
+        # 与服务器连接并处理消息
+        await self.connect()
+        # 等待断开
+        await self.pc.close()
 
     def close_conference(self):
         '''
@@ -167,95 +213,43 @@ class ConferenceClient:
         """
         execute functions based on the command line input
         """
-        async def async_input(prompt):
-            """ 非阻塞的 input() 方法 """
-            loop = asyncio.get_event_loop()
-            return await loop.run_in_executor(None, input, prompt)
-        
-        async def processing_cmd():
-            while True:
-                if not self.on_meeting:
-                    status = 'Free'
-                else:
-                    status = f'OnMeeting-{self.conference_info}'
+        self.set_username()
+        while True:
+            if not self.on_meeting:
+                status = 'Free'
+            else:
+                status = f'OnMeeting-{self.conference_info}'
 
-                cmd_input = input(f'({status}) Please enter a operation (enter "?" to help): ').strip().lower()
-                fields = cmd_input.split(maxsplit=1)
-                if len(fields) == 1:
-                    if cmd_input in ('?', '？'):
-                        print(HELP)
-                    elif cmd_input == 'create':
-                        await self.create_conference()  # Directly await the asynchronous method
-                    elif cmd_input == 'quit':
-                        await self.quit_conference()
-                    elif cmd_input == 'list':
-                        await self.list_conferences()
-                    else:
-                        print(f'[Warn]: Unrecognized cmd_input {cmd_input}')
-                elif len(fields) == 2 and fields[0] == 'join':
-                    input_conf_id = fields[1]
-                    if input_conf_id.isdigit():
-                        await self.join_conference(input_conf_id)  # Directly await the asynchronous method
-                    else:
-                        print('[Warn]: Input conference ID must be in digital form')
-                elif len(fields) == 2 and fields[0] == 'cancel':
-                    input_conf_id = fields[1]
-                    if input_conf_id.isdigit():
-                        await self.cancel_conference(input_conf_id)
+            recognized = True
+            cmd_input = input(f'({status}) Please enter a operation (enter "?" to help): ').strip().lower()
+            fields = cmd_input.split(maxsplit=1)
+            if len(fields) == 1:
+                if cmd_input in ('?', '？'):
+                    print(HELP)
+                elif cmd_input == 'create':
+                    await self.create_conference()  # Directly await the asynchronous method
+                elif cmd_input == 'quit':
+                    await self.quit_conference()
+                elif cmd_input == 'list':
+                    await self.list_conferences()
                 else:
                     print(f'[Warn]: Unrecognized cmd_input {cmd_input}')
-                # 发送输入
-                message = cmd_input
-                if self.channel and self.channel.readyState == "open":
-                    self.channel.send(message)
+            elif len(fields) == 2 and fields[0] == 'join':
+                input_conf_id = fields[1]
+                if input_conf_id.isdigit():
+                    await self.join_conference(input_conf_id)  # Directly await the asynchronous method
+                else:
+                    print('[Warn]: Input conference ID must be in digital form')
+            elif len(fields) == 2 and fields[0] == 'cancel':
+                input_conf_id = fields[1]
+                if input_conf_id.isdigit():
+                    await self.cancel_conference(input_conf_id)
+            else:
+                print(f'[Warn]: Unrecognized cmd_input {cmd_input}')
         
-        # 当服务器创建了数据通道时，开始监听从服务器创建的数据通道
-        @self.pc.on('datachannel')
-        def on_datachannel(channel):
-            print(f"DataChannel created by server: {channel.label}")
-            @channel.on("message")
-            def on_message(message):
-                print(f"Message from server: {message}")
 
-         # 监听ICE连接状态变化
-        
-        @self.pc.on("iceconnectionstatechange")
-        async def on_iceconnectionstatechange():
-            if self.pc.iceConnectionState == "failed":
-                await self.pc.close()
-        
-        # 处理远程音视频轨道
-        @self.pc.on("track")
-        def on_track(track):
-            print(f"[INFO] Received remote track: {track.kind}")
-            if track.kind == "video":
-                asyncio.create_task(self.handle_video_track(track))
-            elif track.kind == "audio":
-                asyncio.create_task(play_audio())
-                asyncio.create_task(self.handle_audio_track(track))
-        
-        self.set_username()
-        # 创建WebRTC数据通道,监听open和message实践
-        self.channel = self.pc.createDataChannel("chat")
-        self.channel.on("open", lambda: print("[INFO] Text DataChannel open"))
-        self.channel.on("message", lambda message: print(f"Received message: {message}"))
 
-        # 创建音视频轨道
-        video_track = VideoStreamTrack()
-        self.pc.addTrack(video_track)
-        print("[INFO] Video DataChannel open")
-        audio_track = MicrophoneStreamTrack()
-        self.pc.addTrack(audio_track)
-        print("[INFO] Audio DataChannel open")
-
-        # 与服务器连接并处理消息
-        await self.connent()
-
-        processing_cmd()
-        
-        await self.pc.close()
-
-    async def connent(self):
+    async def connect(self):
         """
         与服务器建立连接、发送 SDP提议、以及接收 SDP 答复
         """
@@ -265,7 +259,7 @@ class ConferenceClient:
         await self.pc.setLocalDescription(offer)
 
         # 发送 SDP Offer
-        reader, writer = await asyncio.open_connection(self.server_host, self.server_port)
+        reader, writer = await asyncio.open_connection(SERVER_IP, MAIN_SERVER_PORT)
         writer.write(self.pc.localDescription.sdp.encode())
         await writer.drain()
 
@@ -320,5 +314,5 @@ class MicrophoneStreamTrack(AudioStreamTrack):
 
 if __name__ == '__main__':
     client1 = ConferenceClient()
-    client1.start()
-
+    client1.server_addr = (SERVER_IP, MAIN_SERVER_PORT)
+    asyncio.run(client1.start())  # Start the event loop with asyncio.run()
