@@ -23,4 +23,4 @@ BG_PATH = "no_signal_720p.jpg"
 voice = True
 play = True
 screen = False
-camare = False
+camare = True

@@ -13,7 +13,7 @@ from config import *
 from collections import deque
 import time
 import asyncio
-from aiortc import RTCPeerConnection, RTCSessionDescription, MediaStreamTrack,VideoStreamTrack,AudioStreamTrack, MediaRelay
+from aiortc import RTCPeerConnection, RTCSessionDescription, MediaStreamTrack,VideoStreamTrack,AudioStreamTrack
 from aiortc.contrib.signaling import TcpSocketSignaling
 from aiortc.mediastreams import VideoFrame,AudioFrame
 import json
@@ -70,7 +70,6 @@ def resize_image_to_fit_screen(image, my_screen_size):
     resized_image = image.resize((new_width, new_height), Image.LANCZOS)
 
     return resized_image
-
 
 def overlay_camera_images(screen_image, camera_images):
     """
@@ -172,7 +171,7 @@ def record_audio():
             if voice:
                 record_buffer.append(data) # 如果打开声音，才将录制的数据放入队列
         except Exception as e:
-            print(f"[录制错误] {e}")
+            print(f"[音频录制错误] {e}")
 
 # 返回原始 PCM 音频数据
 def capture_voice_frame():
@@ -207,7 +206,7 @@ def capture_video_frame():
     frame_resized = cv2.resize(frame_bgr, window_resolution, interpolation=cv2.INTER_LINEAR)
     return frame_resized
 
-# 测试录制后的音频
+# 测试录制后的视频
 def test_play_video():
     """
     捕获视频帧并以 720p 分辨率播放
@@ -232,6 +231,19 @@ def test_play_video():
         # 关闭窗口
         cv2.destroyAllWindows()
 
+# 测试录制后的音频
+def test_play_audio():
+    global is_running
+    while is_running:
+        try:
+            data = streamin.read(CHUNK, exception_on_overflow=False)
+            if voice:
+                record_buffer.append(data) # 如果打开声音，才将录制的数据放入队列
+            play_buffer.append(capture_voice_frame())
+            if play:
+                streamout.write(data) # 当开启声音的时候播放
+        except Exception as e:
+            print(f"[音频录制错误] {e}")    
 
 # 向streamout写入audio_buffer的frame
 def play_audio():
@@ -246,7 +258,8 @@ def play_audio():
             else:
                 time.sleep(0.01)  # 缓冲区为空时稍作等待
         except Exception as e:
-            print(f"[视频播放错误] {e}")
+            print(f"[音频播放错误] {e}")
+
 
 # 播放视频帧
 def play_video(frame):
@@ -294,7 +307,7 @@ def close():
 
 if __name__ == "__main__":
     try:
-        test_play_video()
+        test_play_audio()
     except KeyboardInterrupt:
         print("程序中断")
     finally:
