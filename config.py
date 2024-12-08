@@ -3,7 +3,7 @@ HELP = 'Create         : create an conference\n' \
        'Quit           : quit an on-going conference\n' \
        'Cancel         : cancel your on-going conference (only the manager)\n\n' \
        'List           : list all on-going conferences\n' \
-       'Help or ?      : show help information\n'
+       '?      : show help information\n'
 
 SERVER_IP = '127.0.0.1'
 MAIN_SERVER_PORT = 8888
