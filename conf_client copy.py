@@ -202,10 +202,10 @@ class ConferenceClient:
         # 当服务器创建了数据通道时，开始监听从服务器创建的数据通道
         @self.pc.on('datachannel')
         def on_datachannel(channel):
-            print(f"DataChannel created by server: {channel.label}")
+            print(f"[INFO] DataChannel created by server: {channel.label}")
             @channel.on("message")
             def on_message(message):
-                print(f"Message from server: {message}")
+                print(f"[DATA] Message from server: {message}")
 
         # 监听ICE连接状态变化
         @self.pc.on("iceconnectionstatechange")

@@ -109,12 +109,9 @@ class ConferenceServer:
             @channel.on("message")
             def on_message(message):
                 print(f"Message from {channel.label}: {message}")
-                # 向所有连接的客户端广播消息，除了发送者
+                # 向所有连接的客户端广播消息
                 for other_addr, other_channel in self.client_conns.items():
-                    # if other_pc != pc:  # Don't send back to the sender
                     try:
-                        # Create a new data channel for each connected client to send the message
-                        # data_channel = other_pc.createDataChannel("chat")
                         other_channel.send(message)
                         print(f"Broadcasting message to {other_addr}: {message}")
                     except Exception as e:

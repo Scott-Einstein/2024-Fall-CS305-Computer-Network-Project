@@ -10,16 +10,35 @@ import pyautogui
 import numpy as np
 from PIL import Image, ImageGrab
 from config import *
-
+from collections import deque
+import time
+import asyncio
+from aiortc import RTCPeerConnection, RTCSessionDescription, MediaStreamTrack,VideoStreamTrack,AudioStreamTrack, MediaRelay
+from aiortc.contrib.signaling import TcpSocketSignaling
+from aiortc.mediastreams import VideoFrame,AudioFrame
 
 # audio setting
 FORMAT = pyaudio.paInt16
 audio = pyaudio.PyAudio()
-streamin = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
-streamout = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, output=True, frames_per_buffer=CHUNK)
-
-# print warning if no available camera
-cap = cv2.VideoCapture(0)
+is_running = True
+# 录制环形缓冲区
+record_buffer = deque(maxlen=BUFFER_SIZE)  # 使用双端队列实现环形缓冲区
+play_buffer = deque(maxlen=BUFFER_SIZE)
+streamin = audio.open(
+    format=FORMAT,
+    channels=CHANNELS,
+    rate=RATE,
+    input=True,
+    start=True
+)
+streamout = audio.open(
+    format=FORMAT,
+    channels=CHANNELS,
+    rate=RATE,
+    output=True,
+    start=True
+)
+cap = cv2.VideoCapture(0)  # 0 表示使用默认的摄像头
 if cap.isOpened():
     can_capture_camera = True
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, camera_width)
@@ -100,14 +119,39 @@ def overlay_camera_images(screen_image, camera_images):
     else:
         return screen_image
 
+# 把摄像头显示在screen的左上角
+def overlay_camera_image(camera_image, screen_image):
+    """
+    将 camera_image 叠加在 screen_image 上，返回一个 720p 图像（1280x720）。
+    下层为 screen_image，右上角为 camera_image。
+    """
+    # 目标分辨率
+    window_resolution = (1280, 720)
 
+    # 调整 screen_image 到目标分辨率
+    screen_frame = cv2.resize(cv2.cvtColor(np.array(screen_image), cv2.COLOR_RGB2BGR), window_resolution, interpolation=cv2.INTER_LINEAR)
+    
+    # 计算右上角相机图像的分辨率
+    cam_res = (1280 // 4, 720 // 4)  # 占总画布的 1/4
+    
+    # 调整 camera_image 到右上角大小
+    camera_frame = cv2.resize(np.array(camera_image), cam_res, interpolation=cv2.INTER_LINEAR)
+    
+    # 计算 camera_frame 的放置位置
+    x_offset = 1280 - cam_res[0]  # 右上角 x 起点
+    y_offset = 0                  # 右上角 y 起点
+    
+    # 将 camera_frame 叠加到 screen_frame 的右上角
+    screen_frame[y_offset:y_offset + cam_res[1], x_offset:x_offset + cam_res[0]] = camera_frame
+
+    return screen_frame
+
+# 返回截图作为 PIL.Image 对象
 def capture_screen():
-    # capture screen with the resolution of display
-    # img = pyautogui.screenshot()
     img = ImageGrab.grab()
     return img
 
-
+# 从相机中读取一帧图像，返回 PIL.Image 对象
 def capture_camera():
     # capture frame of camera
     ret, frame = cap.read()
@@ -115,11 +159,102 @@ def capture_camera():
         raise Exception('Fail to capture frame from camera')
     return Image.fromarray(frame)
 
+# 持续录音
+def record_audio():
+    """
+    持续录制音频，并写入缓冲区
+    """
+    global is_running
+    while is_running:
+        try:
+            data = streamin.read(CHUNK, exception_on_overflow=False)
+            if voice:
+                record_buffer.append(data) # 如果打开声音，才将录制的数据放入队列
+        except Exception as e:
+            print(f"[录制错误] {e}")
 
-def capture_voice():
-    return streamin.read(CHUNK)
+# 返回原始 PCM 音频数据
+def capture_voice_frame():
+    """
+    从缓冲区读取音频数据，如果缓冲区为空，返回空白音频帧
+    """
+    try:
+        # 从缓冲区读取音频数据
+        return record_buffer.popleft()
+    except IndexError:
+        # 如果缓冲区为空，返回空白帧
+        return b'\x00' * CHUNK * CHANNELS * 2  # 每个样本16-bit，占2字节
+    
+# 返回处理的图像
+def capture_video_frame():
+    if camare and not screen:
+        # camare 不需要BGR转换
+        frame_bgr = np.array(capture_camera())
+    elif not camare and screen:
+        # screen 需要bgr转换
+        frame_np = np.array(capture_screen())
+        # 转换为 BGR 格式
+        frame_bgr = cv2.cvtColor(frame_np, cv2.COLOR_RGB2BGR)
+    elif camare and screen:
+        camare_img = capture_camera()
+        screen_img = capture_screen()
+        frame_bgr =  overlay_camera_image(camare_img, screen_img)
+    else:
+        frame_bgr = cv2.imread(BG_PATH)
+
+    # 调整为 720p 分辨率
+    frame_resized = cv2.resize(frame_bgr, window_resolution, interpolation=cv2.INTER_LINEAR)
+    return frame_resized
+
+# 测试录制后的音频
+def test_play_video():
+    """
+    捕获视频帧并以 720p 分辨率播放
+    """
+
+    try:
+        while True:
+            # 捕获视频帧
+            video_frame = capture_video_frame()
+
+            # 显示视频帧
+            cv2.imshow("Video - 720p", video_frame)
+
+            # 检测键盘输入，如果按下 'q' 键，则退出
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                print("视频播放测试结束")
+                break
+
+    except Exception as e:
+        print(f"[Error] Video capture error: {e}")
+    finally:
+        # 关闭窗口
+        cv2.destroyAllWindows()
 
 
+# 向streamout写入audio_buffer的frame
+def play_audio():
+    global is_running
+    while is_running:
+        try:
+            if play_buffer:
+                # 从缓冲区获取音频数据并播放
+                data = play_buffer.popleft()
+                if play:
+                    streamout.write(data) # 当开启声音的时候播放
+            else:
+                time.sleep(0.01)  # 缓冲区为空时稍作等待
+        except Exception as e:
+            print(f"[视频播放错误] {e}")
+
+# 播放视频帧
+def play_video(frame):
+    try:
+        cv2.imshow("Video - 720p", frame)
+    except Exception as e:
+        print(f"[Error] Video playing error: {e}")
+
+# 将 PIL.Image 对象压缩为JPEG
 def compress_image(image, format='JPEG', quality=85):
     """
     compress image and output Bytes
@@ -135,7 +270,7 @@ def compress_image(image, format='JPEG', quality=85):
 
     return img_byte_arr
 
-
+# 将压缩后的图像字节数据解压为 PIL.Image 
 def decompress_image(image_bytes):
     """
     decompress bytes to PIL.Image
@@ -146,3 +281,20 @@ def decompress_image(image_bytes):
     image = Image.open(img_byte_arr)
 
     return image
+
+def close():
+    cv2.destroyAllWindows()
+    streamin.stop_stream()
+    streamin.close()
+    streamout.stop_stream()
+    streamout.close()
+    audio.terminate()
+
+
+if __name__ == "__main__":
+    try:
+        test_play_video()
+    except KeyboardInterrupt:
+        print("程序中断")
+    finally:
+        close()  # 确保资源被正确关闭
