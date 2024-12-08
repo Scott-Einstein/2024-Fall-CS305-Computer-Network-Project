@@ -305,7 +305,7 @@ class MicrophoneStreamTrack(AudioStreamTrack):
         """捕获音频数据并生成音频帧"""
         try:
             self.frame_count += 1
-            audio_frame = capture_voice_frame
+            audio_frame = capture_voice_frame()
             print(f"[INFO] Sending audio frame {self.frame_count}.")
             return audio_frame
         except Exception as e:
