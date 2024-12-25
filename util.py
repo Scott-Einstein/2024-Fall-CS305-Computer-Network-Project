@@ -15,8 +15,15 @@ import time
 import asyncio
 from aiortc import RTCPeerConnection, RTCSessionDescription, MediaStreamTrack,VideoStreamTrack,AudioStreamTrack
 from aiortc.contrib.signaling import TcpSocketSignaling
+from aiortc.contrib.media import MediaRelay
 from aiortc.mediastreams import VideoFrame,AudioFrame
+
+# from av import AudioFrame
+
+
 import json
+import fractions
+import threading
 
 # audio setting
 FORMAT = pyaudio.paInt16
@@ -30,14 +37,14 @@ streamin = audio.open(
     channels=CHANNELS,
     rate=RATE,
     input=True,
-    start=True
+    start=True,
 )
 streamout = audio.open(
     format=FORMAT,
     channels=CHANNELS,
     rate=RATE,
     output=True,
-    start=True
+    start=True,
 )
 cap = cv2.VideoCapture(0)  # 0 表示使用默认的摄像头
 if cap.isOpened():
@@ -48,7 +55,6 @@ else:
     can_capture_camera = False
 
 my_screen_size = pyautogui.size()
-
 
 def resize_image_to_fit_screen(image, my_screen_size):
     screen_width, screen_height = my_screen_size
@@ -162,16 +168,18 @@ def capture_camera():
 # 持续录音
 def record_audio():
     """
-    持续录制音频，并写入缓冲区
+    持续录制音频,转化为音频帧，并写入缓冲区
     """
     global is_running
     while is_running:
         try:
             data = streamin.read(CHUNK, exception_on_overflow=False)
+            frame = data_to_audio_frame(data, sample_rate=RATE, channels=CHANNELS)
             if voice:
-                record_buffer.append(data) # 如果打开声音，才将录制的数据放入队列
+                record_buffer.append(frame) # 如果打开声音，才将录制的数据放入队列
         except Exception as e:
             print(f"[音频录制错误] {e}")
+    print("[INFO] End recording audio from microphone.")
 
 # 返回原始 PCM 音频数据
 def capture_voice_frame():
@@ -187,6 +195,9 @@ def capture_voice_frame():
     
 # 返回处理的图像
 def capture_video_frame():
+    global screen,camare,voice,play  # 明确声明这是全局变量
+
+    print(f"camare:{camare}")
     if camare and not screen:
         # camare 不需要BGR转换
         frame_bgr = np.array(capture_camera())
@@ -196,6 +207,7 @@ def capture_video_frame():
         # 转换为 BGR 格式
         frame_bgr = cv2.cvtColor(frame_np, cv2.COLOR_RGB2BGR)
     elif camare and screen:
+        # cv2 均衡化亮度
         camare_img = capture_camera()
         screen_img = capture_screen()
         frame_bgr =  overlay_camera_image(camare_img, screen_img)
@@ -204,7 +216,9 @@ def capture_video_frame():
 
     # 调整为 720p 分辨率
     frame_resized = cv2.resize(frame_bgr, window_resolution, interpolation=cv2.INTER_LINEAR)
-    return frame_resized
+    frame_rgb = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
+    video_frame = VideoFrame.from_ndarray(frame_rgb)
+    return video_frame
 
 # 测试录制后的视频
 def test_play_video():
@@ -216,9 +230,9 @@ def test_play_video():
         while True:
             # 捕获视频帧
             video_frame = capture_video_frame()
-
+            frame = video_frame.to_ndarray(format="bgr24")
             # 显示视频帧
-            cv2.imshow("Video - 720p", video_frame)
+            cv2.imshow("Video - 720p", frame)
 
             # 检测键盘输入，如果按下 'q' 键，则退出
             if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -237,13 +251,92 @@ def test_play_audio():
     while is_running:
         try:
             data = streamin.read(CHUNK, exception_on_overflow=False)
+            # frame = AudioFrame(format="s16", samples = CHUNK)
+            # pcm_array = np.frombuffer(data, dtype=np.int16)
+            # frame.planes[0].update(pcm_array.tobytes())
             if voice:
                 record_buffer.append(data) # 如果打开声音，才将录制的数据放入队列
-            play_buffer.append(capture_voice_frame())
+            play_buffer.append(record_buffer.popleft())
             if play:
+                data = play_buffer.popleft()
+                # data = frame.to_ndarray(format="s16")
                 streamout.write(data) # 当开启声音的时候播放
-        except Exception as e:
-            print(f"[音频录制错误] {e}")    
+        # except Exception as e:
+        #     print(f"[音频录制错误] {e}")    
+        finally:
+            pass
+
+def test_play_audioframe():
+    global is_running
+    while is_running:
+        try:
+            # 从音频输入流读取 PCM 数据
+            data = streamin.read(CHUNK, exception_on_overflow=False)
+
+            # 将 PCM 数据封装为 AudioFrame
+            frame = data_to_audio_frame(data, sample_rate=RATE, channels=CHANNELS)
+            
+            # 如果打开声音，存入录制缓冲区
+            if voice:
+                record_buffer.append(frame)
+
+            # 存入播放缓冲区
+            play_buffer.append(frame)
+
+            # 播放音频
+            if play and play_buffer:
+                frame_to_play = play_buffer.popleft()
+                pcm_data = audio_frame_to_data(frame_to_play)  # 解包 AudioFrame 为 PCM 数据
+                streamout.write(pcm_data)  # 播放解包后的 PCM 数据
+        # except Exception as e:
+        #     print(f"[音频录制错误] {e}")
+        finally:
+            pass
+
+def audio_frame_to_data(frame):
+    """
+    将 AudioFrame 解包为 PCM 数据。
+    :param frame: PyAV 的 AudioFrame 对象
+    :return: 原始 PCM 数据
+    """
+
+    if frame is None:
+        return b'\x00' * CHUNK * CHANNELS * 2  # 返回空白音频帧
+    return b"".join(bytes(plane) for plane in frame.planes)  # 获取音频数据的缓冲区
+
+
+
+def data_to_audio_frame(data, sample_rate, channels):
+    """
+    将 PCM 数据封装为 AudioFrame。
+    :param data: 原始 PCM 音频数据
+    :param sample_rate: 音频采样率
+    :param channels: 音频通道数
+    :return: 封装后的 AudioFrame
+    """
+    try:
+        # 每个样本占用字节数
+        bytes_per_sample = 2  # 16-bit PCM 数据
+
+        # 计算样本数
+        samples = len(data) // (bytes_per_sample * channels)
+
+        # 创建 AudioFrame
+        frame = AudioFrame(format="s16", layout="stereo", samples=samples)
+
+        # 填充帧数据
+        frame.planes[0].update(data)
+
+        # 设置时间基准
+        frame.sample_rate = sample_rate
+        frame.time_base = fractions.Fraction(1, RATE)
+
+        return frame
+    except Exception as e:
+        print(f"[ERROR] Failed to create AudioFrame: {e}")
+        return None
+
+
 
 # 向streamout写入audio_buffer的frame
 def play_audio():
@@ -252,9 +345,10 @@ def play_audio():
         try:
             if play_buffer:
                 # 从缓冲区获取音频数据并播放
-                data = play_buffer.popleft()
+                frame_to_play = play_buffer.popleft()
+                pcm_data = audio_frame_to_data(frame_to_play)  # 解包 AudioFrame 为 PCM 数据
                 if play:
-                    streamout.write(data) # 当开启声音的时候播放
+                    streamout.write(pcm_data) # 当开启声音的时候播放
             else:
                 time.sleep(0.01)  # 缓冲区为空时稍作等待
         except Exception as e:
@@ -264,6 +358,7 @@ def play_audio():
 # 播放视频帧
 def play_video(frame):
     try:
+        frame = frame.to_ndarray(format="bgr24")
         cv2.imshow("Video - 720p", frame)
     except Exception as e:
         print(f"[Error] Video playing error: {e}")
@@ -307,7 +402,7 @@ def close():
 
 if __name__ == "__main__":
     try:
-        test_play_audio()
+        test_play_audioframe()
     except KeyboardInterrupt:
         print("程序中断")
     finally:
