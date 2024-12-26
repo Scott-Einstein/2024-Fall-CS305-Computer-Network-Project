@@ -294,6 +294,7 @@ class ConferenceClient:
         print(f"[INFO] Connecting to new client: {username} at {addr}")
         ip, port = addr.split(":")
         port = CLIENT_PORT
+        print(port)
         # 创建新的 RTCPeerConnection
         pc = RTCPeerConnection()
 
@@ -310,7 +311,7 @@ class ConferenceClient:
         data_channel.on("message", lambda message: print(f"[INFO] Message from {username}: {message}"))
 
         # 处理远程音视频轨道
-        @self.pc.on("track")
+        @pc.on("track")
         def on_track(track):
             print(f"Received remote track: {track.kind}")
             if track.kind == "video":
@@ -325,7 +326,7 @@ class ConferenceClient:
                 self.user_tasks[username] = self.user_tasks.get(username, []) + [task]
 
         # 与服务器连接并处理消息
-        await self.connect(ip, port)
+        await self.connect(ip, CLIENT_PORT)
 
         # except Exception as e:
         #     print(f"[ERROR] Failed to connect to {username} at {addr}: {e}")
