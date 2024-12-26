@@ -283,47 +283,52 @@ class ConferenceClient:
         :param username: 新用户的用户名
         :param addr: 新用户的地址 (IP:PORT)
         """
-        try:
-            self.peers[username] = addr  
+        # try:
+        if isinstance(addr, list):
+            ip, port = addr
+            addr = f"{ip}:{port}"
+        username = ip
+        self.peers[username] = addr  
+        print(username)
+        print(addr)
+        print(f"[INFO] Connecting to new client: {username} at {addr}")
+        ip, port = addr.split(":")
+        port = CLIENT_PORT
+        # 创建新的 RTCPeerConnection
+        pc = RTCPeerConnection()
 
-            print(f"[INFO] Connecting to new client: {username} at {addr}")
-            ip, port = addr.split(":")
-            port = CLIENT_PORT
-            # 创建新的 RTCPeerConnection
-            pc = RTCPeerConnection()
+        # 添加音视频轨道
+        pc.addTrack(self.audio_relay.subscribe(self.audio_track))  # 发送音频轨道
+        pc.addTrack(self.video_relay.subscribe(self.video_track))  # 发送视频轨道
 
-            # 添加音视频轨道
-            pc.addTrack(self.audio_relay.subscribe(self.audio_track))  # 发送音频轨道
-            pc.addTrack(self.video_relay.subscribe(self.video_track))  # 发送视频轨道
+        # 保存 PeerConnection 实例
+        self.pcs[username] = pc
 
-            # 保存 PeerConnection 实例
-            self.pcs[username] = pc
+        # 创建 DataChannel
+        data_channel = pc.createDataChannel("chat")
+        data_channel.on("open", lambda: print(f"[INFO] DataChannel open with {username}"))
+        data_channel.on("message", lambda message: print(f"[INFO] Message from {username}: {message}"))
 
-            # 创建 DataChannel
-            data_channel = pc.createDataChannel("chat")
-            data_channel.on("open", lambda: print(f"[INFO] DataChannel open with {username}"))
-            data_channel.on("message", lambda message: print(f"[INFO] Message from {username}: {message}"))
+        # 处理远程音视频轨道
+        @self.pc.on("track")
+        def on_track(track):
+            print(f"Received remote track: {track.kind}")
+            if track.kind == "video":
+                print(f"received video data from {username}")
+                self.received_video_tracks[username] = track
+                task = asyncio.create_task(self.handle_video_track(username, track))
+                self.user_tasks[username] = self.user_tasks.get(username, []) + [task]
+            elif track.kind == "audio":
+                print(f"received audio data from {username}")
+                self.received_audio_track[username] = track
+                task = asyncio.create_task(self.handle_audio_track(username,track))
+                self.user_tasks[username] = self.user_tasks.get(username, []) + [task]
 
-            # 处理远程音视频轨道
-            @self.pc.on("track")
-            def on_track(track):
-                print(f"Received remote track: {track.kind}")
-                if track.kind == "video":
-                    print(f"received video data from {username}")
-                    self.received_video_tracks[username] = track
-                    task = asyncio.create_task(self.handle_video_track(username, track))
-                    self.user_tasks[username] = self.user_tasks.get(username, []) + [task]
-                elif track.kind == "audio":
-                    print(f"received audio data from {username}")
-                    self.received_audio_track[username] = track
-                    task = asyncio.create_task(self.handle_audio_track(username,track))
-                    self.user_tasks[username] = self.user_tasks.get(username, []) + [task]
+        # 与服务器连接并处理消息
+        await self.connect(ip, port)
 
-            # 与服务器连接并处理消息
-            await self.connect(ip, port)
-
-        except Exception as e:
-            print(f"[ERROR] Failed to connect to {username} at {addr}: {e}")
+        # except Exception as e:
+        #     print(f"[ERROR] Failed to connect to {username} at {addr}: {e}")
     
     async def disconnect_user(self, username):
         if username in self.user_tasks:
