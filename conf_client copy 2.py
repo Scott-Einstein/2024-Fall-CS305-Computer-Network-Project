@@ -174,7 +174,9 @@ class ConferenceClient:
                 if self.server_pc:
                     print("[INFO] Closing RTCPeerConnection.")
                     await self.server_pc.close()  # 关闭RTCPeerConnection
-
+                for pc in self.pcs:
+                    if pc:
+                        await self.pc.close()
                 # 关闭数据通道
                 if hasattr(self, 'channel') and self.channel:
                     if self.channel.readyState == 'open':
@@ -245,7 +247,9 @@ class ConferenceClient:
         and
         start necessary running task for conference
         '''
-
+        
+        asyncio.create_task(self.listen_for_clients(host="0.0.0.0", port=CLIENT_PORT))
+        
         self.server_pc = RTCPeerConnection()
 
          # 创建WebRTC数据通道,监听open和message实践
@@ -263,7 +267,7 @@ class ConferenceClient:
         # 与服务器连接并处理消息
         await self.connect(server_ip, server_port)
         
-        asyncio.create_task(self.listen_for_clients(host="0.0.0.0", port=CLIENT_PORT))
+        
         # 当服务器创建了数据通道时，开始监听从服务器创建的数据通道
         @self.server_pc.on('datachannel')
         def on_datachannel(channel):
@@ -411,8 +415,18 @@ class ConferenceClient:
         """
         try:
             while True:
+                if track is None:
+                    break
                 frame = await track.recv()
-                # 在 OpenCV 窗口显示视频
+                if isinstance(frame, VideoFrame):
+                    # 转换为 numpy 数组，格式为 BGR
+                    frame_ndarray = frame.to_ndarray(format="bgr24")
+                    # 在对应窗口中显示
+                    cv2.imshow(self.window_names[track], frame_ndarray)
+
+                # 按键退出逻辑
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
                 print(f"[INFO] Processing video frame from {username}")
         except asyncio.CancelledError:
             print(f"[INFO] Video track task for {username} cancelled.")

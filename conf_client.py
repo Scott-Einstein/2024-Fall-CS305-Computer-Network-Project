@@ -56,7 +56,6 @@ class ConferenceClient:
             if not cap.isOpened():
                 raise Exception("Failed to open camera after retry")
 
-
         if self.on_meeting:
             print("You are already in a conference.")
             return

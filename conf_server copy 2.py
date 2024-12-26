@@ -84,9 +84,8 @@ class ConferenceServer:
         # 创建文本传输通道
         channel = pc.createDataChannel("chat")
         username = addr
+        
         # 存储连接信息
-        # username = await reader.read(16384)
-        # username = username.decode()
         self.channels[username] = channel
         self.pcs[username] = pc
         self.writers[username] = writer
