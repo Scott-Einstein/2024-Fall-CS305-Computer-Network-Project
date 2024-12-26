@@ -269,7 +269,7 @@ class ConferenceClient:
                 if(message == 'quit'):
                     await self.quit_conference()
                 else:
-                    self.handle_datachannel_message(message)
+                    await self.handle_datachannel_message(message)
 
         # 监听ICE连接状态变化
         @self.server_pc.on("iceconnectionstatechange")
