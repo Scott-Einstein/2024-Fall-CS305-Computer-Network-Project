@@ -240,7 +240,7 @@ class ConferenceClient:
         start necessary running task for conference
         '''
         if not self.server_on:
-            asyncio.create_task(self.listen_for_clients(host="0.0.0.0", port=CLIENT_PORT))
+            asyncio.create_task(self.listen_for_clients(host=LOCAL_HOST, port=CLIENT_PORT))
         
         self.server_pc = RTCPeerConnection()
 
@@ -524,20 +524,21 @@ class ConferenceClient:
         # 创建 SDP Offer
         offer = await self.server_pc.createOffer()
         await self.server_pc.setLocalDescription(offer)
-
+        print("send")
         # 发送 SDP Offer
         writer.write(self.server_pc.localDescription.sdp.encode())
         await writer.drain()
 
         # 从服务器接收 SDP Answer 数据并解码
         data = await reader.read(16384)
+        print("received sdp")
         answer_sdp = data.decode()
         # 将服务器的 SDP Answer 设置为客户端的远程描述。
         answer = RTCSessionDescription(sdp=answer_sdp, type="answer")
         await self.server_pc.setRemoteDescription(answer)
         print("link to conference server success.")
 
-    async def listen_for_clients(self, host="0.0.0.0", port=CLIENT_PORT):
+    async def listen_for_clients(self, host=LOCAL_HOST, port=CLIENT_PORT):
         """
         监听其他客户端的连接请求。
         :param host: 监听的主机地址

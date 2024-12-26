@@ -8,6 +8,7 @@ HELP = 'Create         : create an conference\n' \
 
 # SERVER_IP = '10.32.157.246'
 SERVER_IP = '10.32.37.95'
+LOCAL_HOST = '10.32.154.123'
 MAIN_SERVER_PORT = 8888
 TIMEOUT_SERVER = 5
 CLIENT_PORT = 9999
