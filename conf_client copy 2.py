@@ -512,8 +512,8 @@ class ConferenceClient:
         """
         reader, writer = await asyncio.open_connection(ip, port)
 
-        writer.write(self.username.encode())
-        await writer.drain()
+        # writer.write(self.username.encode())
+        # await writer.drain()
 
         # 创建 SDP Offer
         offer = await self.server_pc.createOffer()
@@ -529,6 +529,7 @@ class ConferenceClient:
         # 将服务器的 SDP Answer 设置为客户端的远程描述。
         answer = RTCSessionDescription(sdp=answer_sdp, type="answer")
         await self.server_pc.setRemoteDescription(answer)
+        print("link to conference server success.")
 
     async def listen_for_clients(self, host="0.0.0.0", port=CLIENT_PORT):
         """
