@@ -36,15 +36,7 @@ class ConferenceClient:
         self.audio_relay = MediaRelay()
         self.video_relay = MediaRelay()
         self.peers = {}
-
-        loop = asyncio.get_event_loop()
-        # Start server on a specific host and port for the conference
-        server = loop.run_until_complete(
-            asyncio.start_server(self.handle_client, SERVER_IP, MAIN_SERVER_PORT)
-        )
-        print("Server started, awaiting client connections...")
-        # loop.create_task(self.log())  # Start logging task
-        loop.run_until_complete(server.serve_forever())
+        self.server_on = False
 
 
     def set_username(self):
@@ -247,8 +239,8 @@ class ConferenceClient:
         and
         start necessary running task for conference
         '''
-        
-        asyncio.create_task(self.listen_for_clients(host="0.0.0.0", port=CLIENT_PORT))
+        if not self.server_on:
+            asyncio.create_task(self.listen_for_clients(host="0.0.0.0", port=CLIENT_PORT))
         
         self.server_pc = RTCPeerConnection()
 

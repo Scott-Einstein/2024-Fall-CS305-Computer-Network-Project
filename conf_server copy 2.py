@@ -26,6 +26,7 @@ class ConferenceServer:
         self.addrs = dict()
         self.writers = dict()
         self.readers = dict()
+        
 
     async def handle_video(self, track, broadcast_video_track):
         """

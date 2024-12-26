@@ -6,8 +6,8 @@ HELP = 'Create         : create an conference\n' \
        '?      : show help information\n' \
        'Switch [type]     : show help information\n\n'
 
-SERVER_IP = '10.32.157.246'
-# SERVER_IP = '10.32.37.95'
+# SERVER_IP = '10.32.157.246'
+SERVER_IP = '10.32.37.95'
 MAIN_SERVER_PORT = 8888
 TIMEOUT_SERVER = 5
 CLIENT_PORT = 9999
