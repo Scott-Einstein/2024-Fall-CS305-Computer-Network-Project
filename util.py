@@ -195,9 +195,6 @@ def capture_voice_frame():
     
 # 返回处理的图像
 def capture_video_frame():
-    global screen,camare,voice,play  # 明确声明这是全局变量
-
-    print(f"camare:{camare}")
     if camare and not screen:
         # camare 不需要BGR转换
         frame_bgr = np.array(capture_camera())
