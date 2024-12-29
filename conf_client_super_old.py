@@ -477,13 +477,16 @@ class ConferenceClient:
                 global screen, camare, voice, play
                 if(fields[1] == 'voice'):
                     voice = not voice
+                    print(f"voice: {voice}")
                 elif(fields[1] == 'screen'):
                     screen = not screen
+                    print(f"screen: {screen}")
                 elif(fields[1] == 'camare'):
                     camare = not camare
                     print(f"camare: {camare}")
                 elif(fields[1] == 'play'):
                     play = not play
+                    print(f"play: {play}")
                 else:
                     print(f'[Warn]: Unrecognized cmd_input {cmd_input}')
             else:
@@ -752,8 +755,10 @@ class MicrophoneStreamTrack(AudioStreamTrack):
 #         global screen, camare, voice, play
 #         if(data_type == 'voice'):
 #             voice = not voice
+#             print(f"voice: {voice}")
 #         elif(data_type == 'screen'):
 #             screen = not screen
+#             print(f"screen: {screen}")
 #         elif(data_type == 'camare'):
 #             camare = not camare
 #             print(f"camare: {camare}")
