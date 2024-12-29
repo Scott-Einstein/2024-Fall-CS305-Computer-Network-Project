@@ -462,24 +462,40 @@ class MainServer:
 
     async def request_handler(self, reader, writer):
         """
-        running task: handle out-meeting (or also in-meeting) requests from clients
+        Running task: handle requests from clients for the duration of the connection.
         """
-        data = await reader.read(100)
-        cmd = data.decode().strip().lower()
-        print(cmd)
-        if cmd.startswith("create"):
-            await self.handle_create_conference(reader, writer,cmd)
-        elif cmd.startswith("join"):
-            await self.handle_join_conference(reader, writer,cmd)
-        elif cmd.startswith("quit"):
-            await self.handle_quit_conference(reader, writer,cmd)
-        elif cmd.startswith("cancel"):
-            await self.handle_cancel_conference(reader, writer,cmd)
-        elif cmd == "list":
-            await self.handle_list_conferences(reader, writer)
-        else:
-            writer.write(b"Invalid command.")
-            await writer.drain()
+        try:
+            while True:  # 持续监听客户端请求
+                data = await reader.read(100)  # 每次读取 100 字节数据
+                if not data:  # 如果没有数据，表示连接关闭
+                    break
+                
+                cmd = data.decode().strip().lower()  # 解码并处理命令
+                print(f"Received command: {cmd}")
+
+                # 根据命令处理请求
+                if cmd.startswith("create"):
+                    await self.handle_create_conference(reader, writer, cmd)
+                elif cmd.startswith("join"):
+                    await self.handle_join_conference(reader, writer, cmd)
+                elif cmd.startswith("quit"):
+                    await self.handle_quit_conference(reader, writer, cmd)
+                elif cmd.startswith("cancel"):
+                    await self.handle_cancel_conference(reader, writer, cmd)
+                elif cmd == "list":
+                    await self.handle_list_conferences(reader, writer)
+                else:
+                    writer.write(b"Invalid command.\n")
+                    await writer.drain()
+
+        except asyncio.CancelledError:
+            print("Connection was cancelled.")
+        except Exception as e:
+            print(f"Error occurred: {e}")
+        finally:
+            print("Closing the connection.")
+            writer.close()  # 关闭连接
+            await writer.wait_closed()  # 等待连接完全关闭
 
     async def start(self):
         """
