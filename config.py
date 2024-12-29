@@ -4,9 +4,9 @@ HELP = 'Create         : create an conference\n' \
        'Cancel         : cancel your on-going conference (only the manager)\n\n' \
        'List           : list all on-going conferences\n' \
        '?      : show help information\n' \
-       'Switch [type]     : show help information\n\n'
+       'Switch [type]     : switch on/off certain types of data channel\n\n'
 
-# SERVER_IP = '10.32.157.246'
+# SERVER_IP = '127.0.0.1'
 SERVER_IP = '10.32.37.95'
 LOCAL_HOST = '10.32.154.123'
 MAIN_SERVER_PORT = 8888
